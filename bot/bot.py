@@ -112,6 +112,15 @@ async def run_telegram_mode() -> None:
     bot = Bot(token=settings.bot_token)
     dp = Dispatcher()
 
+    # Helper to send response with optional keyboard
+    async def send_response(message: types.Message, response) -> None:
+        """Send response handling both tuple (text, keyboard) and plain text."""
+        if isinstance(response, tuple):
+            text, keyboard = response
+            await message.answer(text, reply_markup=keyboard)
+        else:
+            await message.answer(response)
+
     # Register all commands with aiogram
     for cmd_name, handler_func in _command_registry.items():
         # Create a wrapper that calls our handler and sends the response
@@ -126,7 +135,7 @@ async def run_telegram_mode() -> None:
                     response = await handler(*parts)
                 else:
                     response = await handler()
-                await message.answer(response)
+                await send_response(message, response)
             except Exception as e:
                 logger.error(f"Error handling command: {e}")
                 await message.answer("Sorry, something went wrong.")
@@ -134,13 +143,44 @@ async def run_telegram_mode() -> None:
         # Register with aiogram's command filter
         dp.message.register(command_wrapper, Command(cmd_name))
 
+    # Handle callback queries from inline buttons
+    async def handle_callback(callback: types.CallbackQuery) -> None:
+        """Handle inline button callback queries."""
+        data = callback.data
+        message = callback.message
+        
+        try:
+            if data == "quick_labs":
+                response = await handle_labs()
+                await message.answer(response)
+            elif data == "quick_health":
+                response = await handle_health()
+                await message.answer(response)
+            elif data == "quick_scores":
+                await message.answer("Please specify a lab, e.g., 'lab-01' or use /scores lab-01")
+            elif data == "quick_top":
+                await message.answer("Please specify a lab for top students, e.g., 'Show top 5 in lab-01'")
+            elif data == "quick_help":
+                response = await handle_help()
+                await message.answer(response)
+            elif data == "back":
+                await message.answer("Use /start to see main menu")
+            
+            # Acknowledge the callback
+            await callback.answer()
+        except Exception as e:
+            logger.error(f"Error handling callback: {e}")
+            await callback.answer("Sorry, something went wrong.")
+
+    dp.callback_query.register(handle_callback)
+
     # Handle all other text messages with the LLM intent router
     async def handle_text_message(message: types.Message) -> None:
         try:
             # Skip if this is a command (starts with /)
             if message.text and message.text.startswith("/"):
                 return
-            
+
             response = await handle_message(message.text, debug=False)
             await message.answer(response)
         except Exception as e:
