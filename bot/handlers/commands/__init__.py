@@ -70,7 +70,7 @@ async def handle_scores(lab: str = "") -> str:
             # Handle different response formats
             if isinstance(task_score, dict):
                 task_name = task_score.get("task", task_score.get("name", "Unknown"))
-                pass_rate = task_score.get("pass_rate", task_score.get("score", 0))
+                pass_rate = task_score.get("avg_score") or "0"
                 # Convert to percentage if it's a decimal
                 if isinstance(pass_rate, float) and pass_rate <= 1:
                     pass_rate = pass_rate * 100
