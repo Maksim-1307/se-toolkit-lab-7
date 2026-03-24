@@ -1,9 +1,20 @@
 """Command handlers: /health, /labs, /scores."""
 
+from config import settings
+from services.api_client import LMSAPIClient
+
 
 async def handle_health() -> str:
-    """Check backend health (placeholder)."""
-    return "Backend status: OK (placeholder)"
+    """Check backend health by querying the LMS API."""
+    client = LMSAPIClient(
+        base_url=settings.lms_api_base_url,
+        api_key=settings.lms_api_key,
+    )
+    try:
+        result = await client.health_check()
+        return result["message"]
+    finally:
+        await client.close()
 
 
 async def handle_labs() -> str:
