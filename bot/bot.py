@@ -28,25 +28,26 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 # Command registry: maps command name to handler function
-_command_registry: dict[str, Callable[[], Awaitable[str]]] = {}
+# Handlers can be either Callable[[], Awaitable[str]] or Callable[[str], Awaitable[str]]
+_command_registry: dict[str, Callable] = {}
 
 
 def register_command(name: str) -> Callable:
     """
     Decorator to register a command handler.
-    
+
     Usage:
         @register_command("start")
         async def handle_start() -> str:
             return "Welcome!"
     """
-    def decorator(func: Callable[[], Awaitable[str]]) -> Callable:
+    def decorator(func: Callable) -> Callable:
         _command_registry[name] = func
         return func
     return decorator
 
 
-def get_handler(command: str) -> Callable[[], Awaitable[str]] | None:
+def get_handler(command: str) -> Callable | None:
     """Get handler function by command name."""
     return _command_registry.get(command)
 
@@ -54,22 +55,36 @@ def get_handler(command: str) -> Callable[[], Awaitable[str]] | None:
 async def run_test_mode(command: str) -> None:
     """
     Run a command handler directly and print result to stdout.
-    
+
     This bypasses Telegram entirely — useful for testing handlers
     without needing a bot token or network connection.
     """
     # Parse command (e.g., "/start" -> "start", "/scores lab-04" -> "scores")
-    cmd = command.lstrip("/").split()[0]
-    
+    parts = command.lstrip("/").split()
+    cmd = parts[0]
+    args = parts[1:] if len(parts) > 1 else []
+
     handler = get_handler(cmd)
     if handler is None:
-        print(f"Error: Unknown command '{command}'")
-        print("Available commands:", ", ".join(_command_registry.keys()))
+        print(f"Unknown command: {command}")
+        print("Use /help to see available commands.")
         return
-    
+
     try:
-        response = await handler()
+        # Call handler with args if it accepts them
+        import inspect
+        sig = inspect.signature(handler)
+        if len(sig.parameters) > 0:
+            response = await handler(*args)
+        else:
+            response = await handler()
         print(response)
+    except TypeError as e:
+        if "missing" in str(e):
+            print(f"Error: Command '{cmd}' requires arguments. Usage: /{cmd} <arg>")
+        else:
+            print(f"Error executing command: {e}")
+            raise
     except Exception as e:
         print(f"Error executing command: {e}")
         raise
@@ -86,7 +101,14 @@ async def run_telegram_mode() -> None:
         async def command_wrapper(message: types.Message, cmd=cmd_name) -> None:
             try:
                 handler = _command_registry[cmd]
-                response = await handler()
+                # Extract arguments from message text (e.g., "/scores lab-01" -> ["lab-01"])
+                parts = message.text.split()[1:] if message.text else []
+                import inspect
+                sig = inspect.signature(handler)
+                if len(sig.parameters) > 0:
+                    response = await handler(*parts)
+                else:
+                    response = await handler()
                 await message.answer(response)
             except Exception as e:
                 logger.error(f"Error handling command: {e}")
@@ -94,6 +116,12 @@ async def run_telegram_mode() -> None:
 
         # Register with aiogram's command filter
         dp.message.register(command_wrapper, Command(cmd_name))
+
+    # Fallback handler for unknown commands
+    async def unknown_command(message: types.Message) -> None:
+        await message.answer("Unknown command. Use /help to see available commands.")
+
+    dp.message.register(unknown_command)
 
     logger.info("Starting bot...")
     await dp.start_polling(bot)
