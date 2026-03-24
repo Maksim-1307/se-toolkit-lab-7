@@ -31,6 +31,7 @@ class Settings(BaseSettings):
     # LLM API configuration (for Task 3)
     llm_api_key: str = ""
     llm_api_base_url: str = ""
+    llm_api_model: str = "coder-model"
 
 
 settings = Settings()
