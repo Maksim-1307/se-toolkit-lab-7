@@ -31,7 +31,7 @@ class LMSAPIClient:
                 return {
                     "ok": True,
                     "status_code": response.status_code,
-                    "message": "Backend is healthy",
+                    "message": f"Backend is healthy (HTTP {response.status_code})",
                 }
             else:
                 return {
