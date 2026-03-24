@@ -44,40 +44,40 @@ async def handle_labs() -> str:
 
 async def handle_scores(lab: str = "") -> str:
     """Get per-task scores for a specific lab.
-    
+
     Args:
         lab: The lab identifier (e.g., 'lab-01').
     """
     if not lab:
         return "Please specify a lab. Usage: /scores <lab>\nExample: /scores lab-01"
-    
+
     client = LMSAPIClient(
         base_url=settings.lms_api_base_url,
         api_key=settings.lms_api_key,
     )
     try:
-        result = await client.get_scores(lab)
+        result = await client.get_pass_rates(lab)
         if not result["ok"]:
             return f"Error: {result['error']}"
-        
-        scores = result["scores"]
-        if not scores:
+
+        pass_rates = result["pass_rates"]
+        if not pass_rates:
             return f"No scores found for lab '{lab}'."
-        
+
         # Format per-task scores
         score_lines = []
-        for task_score in scores:
+        for task_score in pass_rates:
             # Handle different response formats
             if isinstance(task_score, dict):
                 task_name = task_score.get("task", task_score.get("name", "Unknown"))
-                pass_rate = task_score.get("avg_score")
+                pass_rate = task_score.get("avg_score", task_score.get("pass_rate", 0))
                 # Convert to percentage if it's a decimal
                 if isinstance(pass_rate, float) and pass_rate <= 1:
                     pass_rate = pass_rate * 100
                 score_lines.append(f"  {task_name}: {pass_rate:.1f}%")
             else:
                 score_lines.append(f"  {task_score}")
-        
+
         return f"Scores for {lab}:\n\n" + "\n".join(score_lines)
     finally:
         await client.close()
