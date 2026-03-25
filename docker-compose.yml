@@ -89,7 +89,7 @@ services:
     volumes:
       - ./caddy/Caddyfile:/etc/caddy/Caddyfile
 
-  lms-bot:
+  bot:
     build:
       context: bot/
     networks:
